@@ -41,7 +41,7 @@ export default function ActiveWorkoutScreen({ navigation }) {
 
   const exerciseById = useMemo(() => {
     const m = new Map();
-    for (const ex of EXERCISES) m.set(ex.id, ex);
+    for (const ex of EXERCISES || []) m.set(ex.id, ex);
     return m;
   }, []);
 
@@ -68,27 +68,50 @@ export default function ActiveWorkoutScreen({ navigation }) {
     [aw?.restingUntil, tick]
   );
 
+  // ✅ Si no hay entreno activo, no intentamos goBack (ya lo resolviste con reset)
   if (!aw) {
     return (
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: '800' }}>
+        <Text style={{ fontSize: 18, fontWeight: '900' }}>
           No hay entreno activo.
         </Text>
+
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            // opcional: limpiar por si quedó “basura”
+            dispatch({ type: 'END_WORKOUT' });
+            navigation.reset({ index: 0, routes: [{ name: 'Today' }] });
+          }}
+          style={{ padding: 14, borderRadius: 12, backgroundColor: 'black' }}
+        >
+          <Text
+            style={{ textAlign: 'center', fontWeight: '900', color: 'white' }}
+          >
+            Volver a Hoy
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            navigation.reset({ index: 0, routes: [{ name: 'QuickWorkout' }] })
+          }
           style={{ padding: 14, borderRadius: 12, borderWidth: 1 }}
         >
-          <Text style={{ textAlign: 'center', fontWeight: '800' }}>Volver</Text>
+          <Text style={{ textAlign: 'center', fontWeight: '900' }}>
+            Ir a Entreno rápido
+          </Text>
         </Pressable>
       </View>
     );
   }
 
-  const ex = aw.items[aw.currentExerciseIndex];
+  const ex = aw.items?.[aw.currentExerciseIndex];
   const meta = ex ? exerciseById.get(ex.id) : null;
   const group = meta?.main ? muscleLabel(meta.main) : null;
 
-  const completedAll = aw.items.every((x) => x.completedSets >= x.totalSets);
+  const completedAll = (aw.items || []).every(
+    (x) => x.completedSets >= x.totalSets
+  );
   const elapsed = Math.floor((Date.now() - aw.startedAt) / 1000);
 
   return (
@@ -105,7 +128,7 @@ export default function ActiveWorkoutScreen({ navigation }) {
         {/* Progreso general */}
         <View style={{ padding: 12, borderWidth: 1, borderRadius: 12, gap: 6 }}>
           <Text style={{ fontSize: 16, fontWeight: '900' }}>Progreso</Text>
-          {aw.items.map((it, idx) => (
+          {(aw.items || []).map((it, idx) => (
             <Text key={`${it.id}-${idx}`} style={{ fontSize: 14 }}>
               • {it.name}: {it.completedSets}/{it.totalSets}
             </Text>
@@ -115,7 +138,7 @@ export default function ActiveWorkoutScreen({ navigation }) {
         {/* Ejercicio actual */}
         <View style={{ padding: 12, borderWidth: 1, borderRadius: 12, gap: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '800' }}>
-            Ejercicio {aw.currentExerciseIndex + 1} de {aw.items.length}
+            Ejercicio {aw.currentExerciseIndex + 1} de {(aw.items || []).length}
           </Text>
 
           <Text style={{ fontSize: 20, fontWeight: '900' }}>{ex?.name}</Text>
@@ -125,15 +148,15 @@ export default function ActiveWorkoutScreen({ navigation }) {
           )}
 
           <Text style={{ fontSize: 14 }}>
-            Set actual: {Math.min(ex.completedSets + 1, ex.totalSets)} /{' '}
-            {ex.totalSets}
+            Set actual:{' '}
+            {Math.min((ex?.completedSets || 0) + 1, ex?.totalSets || 1)} /{' '}
+            {ex?.totalSets || 1}
           </Text>
 
           <Text style={{ fontSize: 14 }}>
-            Reps: {ex.repMin}-{ex.repMax} • Descanso: {ex.rest}s
+            Reps: {ex?.repMin}-{ex?.repMax} • Descanso: {ex?.rest}s
           </Text>
 
-          {/* Botón instrucciones */}
           <Pressable
             onPress={() => openHow(ex.id, ex.name)}
             style={{ padding: 12, borderRadius: 12, borderWidth: 1 }}
@@ -180,7 +203,6 @@ export default function ActiveWorkoutScreen({ navigation }) {
           )}
         </View>
 
-        {/* Fin */}
         {completedAll && (
           <View
             style={{ padding: 12, borderWidth: 1, borderRadius: 12, gap: 10 }}
@@ -191,7 +213,7 @@ export default function ActiveWorkoutScreen({ navigation }) {
             <Pressable
               onPress={() => {
                 dispatch({ type: 'END_WORKOUT' });
-                navigation.goBack();
+                navigation.reset({ index: 0, routes: [{ name: 'Today' }] });
               }}
               style={{
                 padding: 16,
@@ -215,7 +237,7 @@ export default function ActiveWorkoutScreen({ navigation }) {
         <Pressable
           onPress={() => {
             dispatch({ type: 'END_WORKOUT' });
-            navigation.goBack();
+            navigation.reset({ index: 0, routes: [{ name: 'Today' }] });
           }}
           style={{ padding: 14, borderRadius: 12, borderWidth: 1 }}
         >
@@ -225,7 +247,6 @@ export default function ActiveWorkoutScreen({ navigation }) {
         </Pressable>
       </ScrollView>
 
-      {/* Modal Instrucciones */}
       <Modal visible={open} animationType="slide" transparent>
         <View
           style={{

@@ -19,11 +19,11 @@ export default function ExerciseSwapScreen({ navigation, route }) {
   const { state, dispatch } = useAppState();
 
   const dayIndexRaw = route?.params?.dayIndex;
-  const dayIndex = Number.isFinite(Number(dayIndexRaw))
-    ? Number(dayIndexRaw)
-    : null;
+  const itemIndexRaw = route?.params?.itemIndex;
+  const oldId = route?.params?.oldId;
 
-  const oldId = String(route?.params?.oldId || '');
+  const dayIndex = Number(dayIndexRaw);
+  const itemIndex = Number(itemIndexRaw);
 
   const [q, setQ] = useState('');
 
@@ -35,8 +35,20 @@ export default function ExerciseSwapScreen({ navigation, route }) {
         ? state.equipment
         : [];
 
-  const currentDay = state.weeklyPlan?.[dayIndex];
-  const oldItem = currentDay?.items?.find((x) => x.id === oldId);
+  const plan = Array.isArray(state.weeklyPlan) ? state.weeklyPlan : null;
+  const currentDay = plan && Number.isFinite(dayIndex) ? plan[dayIndex] : null;
+
+  const hasValidIndexes =
+    Number.isFinite(dayIndex) &&
+    dayIndex >= 0 &&
+    plan &&
+    dayIndex < plan.length &&
+    Number.isFinite(itemIndex) &&
+    itemIndex >= 0 &&
+    Array.isArray(currentDay?.items) &&
+    itemIndex < currentDay.items.length;
+
+  const oldItem = hasValidIndexes ? currentDay.items[itemIndex] : null;
 
   const oldMeta = useMemo(() => {
     return (EXERCISES || []).find((e) => e.id === oldId) || null;
@@ -44,12 +56,13 @@ export default function ExerciseSwapScreen({ navigation, route }) {
 
   const candidates = useMemo(() => {
     const all = Array.isArray(EXERCISES) ? EXERCISES : [];
+
     const filteredByEquipment =
       userEq.length === 0
         ? all.filter((e) => (e.equipment || []).length === 0)
         : all.filter((e) => hasEquipment(e, userEq));
 
-    // si sabemos el "main" del ejercicio actual, intentamos mostrar primero esa zona
+    // si sabemos el main del ejercicio actual, priorizamos ese main
     const sameMain = oldMeta?.main
       ? filteredByEquipment.filter(
           (e) => e.main === oldMeta.main && e.id !== oldId
@@ -75,33 +88,30 @@ export default function ExerciseSwapScreen({ navigation, route }) {
   }, [userEq, oldId, oldMeta?.main, q]);
 
   function pick(ex) {
-    if (dayIndex == null || !oldId) {
-      navigation.goBack();
-      return;
-    }
-
     dispatch({
       type: 'SWAP_EXERCISE',
       dayIndex,
+      itemIndex,
       oldId,
       newExercise: {
         id: ex.id,
         name: ex.name,
-        // opcional (no rompe nada si tu reducer lo ignora)
         main: ex.main,
         equipment: ex.equipment,
         how: ex.how,
       },
     });
-
     navigation.goBack();
   }
 
-  if (dayIndex == null || oldId.length === 0) {
+  if (!oldId || !hasValidIndexes) {
     return (
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 10 }}>
         <Text style={{ fontSize: 16, fontWeight: '900' }}>
-          Faltan parámetros para sustituir el ejercicio.
+          Faltan parámetros válidos para sustituir el ejercicio.
+        </Text>
+        <Text style={{ opacity: 0.75 }}>
+          Volvé a Hoy y tocá “Sustituir” de nuevo.
         </Text>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -136,7 +146,7 @@ export default function ExerciseSwapScreen({ navigation, route }) {
           paddingVertical: 10,
           paddingHorizontal: 12,
           fontSize: 16,
-          fontWeight: '800',
+          fontWeight: '900',
         }}
       />
 

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, Pressable, ScrollView, Share } from 'react-native';
 import { useAppState } from '../store/AppState';
 import { EXERCISES } from '../data/exercises';
 
@@ -16,7 +16,7 @@ function mins(sec) {
 
 // Lunes=0..Domingo=6 (pero Date.getDay: Domingo=0)
 function getTodayIndex(planLength) {
-  const jsDay = new Date().getDay(); // 0 domingo .. 6 sábado
+  const jsDay = new Date().getDay();
   const monday0 = (jsDay + 6) % 7;
   if (!planLength) return 0;
   return monday0 % planLength;
@@ -50,6 +50,27 @@ export default function TodayScreen({ navigation }) {
     return m;
   }, []);
 
+  async function shareDay() {
+    if (!today) return;
+
+    const lines = [];
+    lines.push(`GymFlow — Rutina de hoy`);
+    lines.push(today.name || 'Entreno');
+    lines.push(`Tiempo estimado: ${mins(today.totalSeconds)} min`);
+    lines.push('');
+    (today.items || []).forEach((it) => {
+      lines.push(
+        `- ${it.name}: ${it.sets} sets, ${it.repMin}-${it.repMax} reps, descanso ${it.rest}s`
+      );
+    });
+
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch (e) {
+      console.log('Share error', e?.message || e);
+    }
+  }
+
   if (!plan || !today) {
     return (
       <View style={{ flex: 1, padding: 24, justifyContent: 'center', gap: 12 }}>
@@ -59,14 +80,33 @@ export default function TodayScreen({ navigation }) {
 
         <Pressable
           onPress={() =>
-            navigation.reset({ index: 0, routes: [{ name: 'OnboardingGoal' }] })
+            navigation.getParent()?.getParent()?.navigate('OnboardingGoal') ||
+            navigation.navigate('OnboardingGoal')
           }
           style={{ padding: 14, borderRadius: 10, backgroundColor: 'black' }}
         >
           <Text
             style={{ color: 'white', textAlign: 'center', fontWeight: '900' }}
           >
-            Crear rutina
+            Crear rutina (onboarding)
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigation.navigate('QuickWorkout')}
+          style={{ padding: 14, borderRadius: 10, borderWidth: 1 }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900' }}>
+            Entreno rápido
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigation.navigate('Profile')}
+          style={{ padding: 14, borderRadius: 10, borderWidth: 1 }}
+        >
+          <Text style={{ textAlign: 'center', fontWeight: '900' }}>
+            Perfil / Defaults
           </Text>
         </Pressable>
       </View>
@@ -91,7 +131,7 @@ export default function TodayScreen({ navigation }) {
         </Text>
 
         <View style={{ gap: 10, marginTop: 8 }}>
-          {today.items.map((it, idx) => {
+          {(today.items || []).map((it, idx) => {
             const meta = exerciseById.get(it.id);
             const group = meta?.main ? muscleLabel(meta.main) : null;
 
@@ -121,8 +161,17 @@ export default function TodayScreen({ navigation }) {
 
                 <Pressable
                   onPress={() =>
+                    navigation
+                      .getParent()
+                      ?.getParent()
+                      ?.navigate('ExerciseSwap', {
+                        dayIndex: todayIndex,
+                        itemIndex: idx,
+                        oldId: it.id,
+                      }) ||
                     navigation.navigate('ExerciseSwap', {
                       dayIndex: todayIndex,
+                      itemIndex: idx,
                       oldId: it.id,
                     })
                   }
@@ -139,6 +188,42 @@ export default function TodayScreen({ navigation }) {
       </View>
 
       <Pressable
+        onPress={shareDay}
+        style={{ padding: 14, borderRadius: 10, borderWidth: 1 }}
+      >
+        <Text style={{ textAlign: 'center', fontSize: 16, fontWeight: '900' }}>
+          Compartir rutina de hoy
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => {
+          dispatch({
+            type: 'START_WORKOUT',
+            dayIndex: todayIndex,
+            items: today.items,
+            name: today.name || 'Entreno',
+            source: today.isCustom ? 'custom' : 'plan',
+            meta: { dayIndex: todayIndex },
+          });
+          navigation.getParent()?.getParent()?.navigate('ActiveWorkout') ||
+            navigation.navigate('ActiveWorkout');
+        }}
+        style={{ padding: 14, borderRadius: 10, backgroundColor: 'black' }}
+      >
+        <Text
+          style={{
+            color: 'white',
+            textAlign: 'center',
+            fontSize: 16,
+            fontWeight: '900',
+          }}
+        >
+          Entrenar ahora
+        </Text>
+      </Pressable>
+
+      <Pressable
         onPress={() => navigation.navigate('Week')}
         style={{ padding: 14, borderRadius: 10, borderWidth: 1 }}
       >
@@ -148,14 +233,11 @@ export default function TodayScreen({ navigation }) {
       </Pressable>
 
       <Pressable
-        onPress={() => {
-          dispatch({ type: 'RESET_ALL' });
-          navigation.reset({ index: 0, routes: [{ name: 'OnboardingGoal' }] });
-        }}
+        onPress={() => navigation.navigate('Profile')}
         style={{ padding: 14, borderRadius: 10, borderWidth: 1 }}
       >
         <Text style={{ textAlign: 'center', fontSize: 16, fontWeight: '900' }}>
-          Reiniciar onboarding
+          Perfil / Defaults / Historial
         </Text>
       </Pressable>
     </ScrollView>

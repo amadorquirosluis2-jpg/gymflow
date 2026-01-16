@@ -31,6 +31,25 @@ const PROFILES = [
   },
 ];
 
+function applyTrainingDefaultsToPlan(plan, defaults) {
+  if (!Array.isArray(plan)) return plan;
+
+  const d = defaults || { sets: 3, repMin: 8, repMax: 12, rest: 90 };
+
+  return plan.map((day) => ({
+    ...day,
+    items: Array.isArray(day?.items)
+      ? day.items.map((it) => ({
+          ...it,
+          sets: Number.isFinite(it?.sets) ? it.sets : d.sets,
+          repMin: Number.isFinite(it?.repMin) ? it.repMin : d.repMin,
+          repMax: Number.isFinite(it?.repMax) ? it.repMax : d.repMax,
+          rest: Number.isFinite(it?.rest) ? it.rest : d.rest,
+        }))
+      : [],
+  }));
+}
+
 export default function OnboardingEquipmentScreen({ navigation }) {
   const { state, dispatch } = useAppState();
 
@@ -40,10 +59,16 @@ export default function OnboardingEquipmentScreen({ navigation }) {
   );
   const [expanded, setExpanded] = useState(false);
 
-  const allIds = useMemo(
-    () => EQUIPMENT_CATEGORIES.flatMap((c) => (c.items || []).map((i) => i.id)),
-    []
-  );
+  const trainingDefaults = useMemo(() => {
+    return (
+      state.trainingDefaults || {
+        sets: 3,
+        repMin: 8,
+        repMax: 12,
+        rest: 90,
+      }
+    );
+  }, [state.trainingDefaults]);
 
   function defaultsFor(profileId) {
     if (profileId === 'none') return [];
@@ -68,38 +93,44 @@ export default function OnboardingEquipmentScreen({ navigation }) {
     const finalProfile = profile || 'none';
     const finalEquipment = finalProfile === 'none' ? [] : equipment;
 
-    // 1. Guardar equipo
+    // 1) Guardar equipo (compat)
     dispatch({
       type: 'SET_EQUIPMENT_PROFILE',
       profile: finalProfile,
       equipment: finalEquipment,
     });
 
-    // 2. Generar rutina
-    const plan = buildWeeklyPlan({
+    // 2) Generar rutina semanal (ya respeta trainingDefaults si tu planBuilder lo soporta)
+    let plan = buildWeeklyPlan({
       goal: state.goal,
       daysPerWeek: state.daysPerWeek,
       sessionMinutes: state.sessionMinutes,
       equipmentProfile: finalProfile,
       equipment: finalEquipment,
+      trainingDefaults: trainingDefaults, // ✅ usar los defaults “resueltos”
     });
 
-    // 3. Guardar rutina
+    // 2.1) Cinturón y tirantes: asegurar sets/reps/rest aunque algún ejercicio venga incompleto
+    plan = applyTrainingDefaultsToPlan(plan, trainingDefaults);
+
+    // 3) Guardar rutina
     dispatch({ type: 'SET_WEEKLY_PLAN', plan });
 
-    // 4. Ir a Hoy
+    // 4) Ir a Home (tabs) para evitar lío de stacks
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Today' }],
+      routes: [{ name: 'Home' }],
     });
   }
 
   function Preview({ profileId, color }) {
     const ids = defaultsFor(profileId);
     if (!ids.length) return null;
+
     const labels = ids.map((x) => equipmentLabel(x));
     const preview = labels.slice(0, 5).join(' • ');
     const extra = labels.length > 5 ? `  +${labels.length - 5}` : '';
+
     return (
       <Text style={{ marginTop: 8, fontSize: 12, color, opacity: 0.9 }}>
         {preview}
@@ -200,7 +231,7 @@ export default function OnboardingEquipmentScreen({ navigation }) {
                                 }}
                               >
                                 {selected ? '✓ ' : ''}
-                                {item.label} {/* SIEMPRE label */}
+                                {item.label}
                               </Text>
                             </Pressable>
                           );
